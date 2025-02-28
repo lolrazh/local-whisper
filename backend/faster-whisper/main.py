@@ -101,7 +101,7 @@ async def transcribe_audio(
         temperature: Sampling temperature for generation
         
     Returns:
-        Transcription result
+        Transcription result with detailed performance metrics
     """
     # Get original filename
     filename = file.filename

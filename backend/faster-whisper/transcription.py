@@ -76,6 +76,7 @@ class TranscriptionService:
             "validation": 0,
             "audio_preprocessing": 0,
             "audio_loading": 0,
+            "feature_extraction": 0,
             "model_inference": 0,
             "decoding": 0,
             "postprocessing": 0,
@@ -97,40 +98,118 @@ class TranscriptionService:
         try:
             # Preprocess audio
             preprocessing_start = time.time()
+            logger.debug(f"Starting audio preprocessing for {filename}")
             _, audio_path = await preprocess_audio(file, filename)
             metrics["audio_preprocessing"] = time.time() - preprocessing_start
             logger.debug(f"Audio preprocessing completed in {metrics['audio_preprocessing']*1000:.2f}ms")
             
-            # Transcribe audio
-            transcription_result, transcription_metrics = self._transcribe_audio_file(str(audio_path), return_metrics=True)
+            # Execute transcription in a separate thread to not block the event loop
+            logger.debug(f"Starting Faster Whisper inference")
             
-            # Update metrics from transcription
-            metrics.update(transcription_metrics)
+            # Run in a separate thread to avoid blocking the event loop
+            loop = asyncio.get_event_loop()
+            transcription, detailed_metrics = await loop.run_in_executor(
+                None,
+                lambda: self._transcribe_audio_file(str(audio_path), True)
+            )
             
-            # Total processing time
+            # Update metrics with detailed inference metrics
+            metrics.update(detailed_metrics)
+            
+            # Calculate total time
             metrics["total"] = time.time() - total_start
             
-            # Format response
-            response = {
-                "text": transcription_result,
+            # Calculate overhead (time not accounted for in the specific measurements)
+            measured_time = sum(metrics.values()) - metrics["total"] - metrics["model_load"]
+            metrics["overhead"] = metrics["total"] - measured_time
+            
+            # Log performance summary in a more visible format
+            logger.info("\n" + "="*50)
+            logger.info(f"FASTER WHISPER TRANSCRIPTION METRICS - {filename}")
+            logger.info("="*50)
+            logger.info(f"Transcription result: \"{transcription}\"")
+            logger.info("Transcription completed successfully")
+            
+            # Detailed metrics are logged at debug level only
+            logger.debug(f"Total time: {metrics['total']*1000:.2f}ms")
+            
+            # Group metrics by category for better readability
+            preprocessing_metrics = {
+                "Validation": metrics["validation"],
+                "Audio Preprocessing": metrics["audio_preprocessing"],
+                "Audio Loading": metrics["audio_loading"]
+            }
+            
+            model_metrics = {
+                "Feature Extraction": metrics.get("feature_extraction", 0),
+                "Model Inference": metrics["model_inference"],
+                "Decoding": metrics["decoding"],
+                "Postprocessing": metrics["postprocessing"]
+            }
+            
+            # Display preprocessing metrics at debug level
+            logger.debug("\nPreprocessing Steps:")
+            for name, value in preprocessing_metrics.items():
+                percent = (value / metrics["total"]) * 100
+                logger.debug(f"  {name}: {value*1000:.2f}ms ({percent:.1f}%)")
+            
+            # Display model metrics at debug level
+            logger.debug("\nModel Inference Steps:")
+            for name, value in model_metrics.items():
+                percent = (value / metrics["total"]) * 100
+                logger.debug(f"  {name}: {value*1000:.2f}ms ({percent:.1f}%)")
+            
+            # Calculate and display percentages of total time
+            preprocessing_time = sum(preprocessing_metrics.values())
+            model_time = sum(model_metrics.values())
+            
+            preprocessing_percent = (preprocessing_time / metrics["total"]) * 100
+            model_percent = (model_time / metrics["total"]) * 100
+            
+            logger.debug("\nTime Distribution:")
+            logger.debug(f"  Preprocessing: {preprocessing_time*1000:.2f}ms ({preprocessing_percent:.1f}%)")
+            logger.debug(f"  Model Inference: {model_time*1000:.2f}ms ({model_percent:.1f}%)")
+            logger.debug(f"  Overhead & Cleanup: {(metrics['overhead'] + metrics['cleanup'])*1000:.2f}ms ({(metrics['overhead'] + metrics['cleanup'])/metrics['total']*100:.1f}%)")
+            logger.debug("="*50)
+            
+            # Create a simplified response that only includes the transcription text and total duration
+            # This prevents the detailed metrics from appearing in the transcription box
+            simplified_response = {
+                "text": transcription,
                 "language": "en",  # Assuming English for now
                 "segments": [],  # We'll add segments in a more complex implementation
-                "total_ms": int(metrics["total"] * 1000),
+                "total_ms": round(metrics["total"] * 1000),
+                "preprocessing_ms": round(preprocessing_time * 1000),
+                "model_inference_ms": round(model_time * 1000),
+                "overhead_ms": round((metrics["overhead"] + metrics["cleanup"]) * 1000),
                 "metrics": {
-                    "model_load_ms": int(metrics["model_load"] * 1000),
-                    "preprocessing_ms": int(metrics["audio_preprocessing"] * 1000),
-                    "inference_ms": int(metrics["model_inference"] * 1000),
-                    "total_ms": int(metrics["total"] * 1000)
+                    "model_load_ms": round(metrics["model_load"] * 1000),
+                    "preprocessing_ms": round(preprocessing_time * 1000),
+                    "inference_ms": round(model_time * 1000),
+                    "total_ms": round(metrics["total"] * 1000)
                 }
             }
             
             if return_metrics:
-                return response, metrics
-            return response
+                return simplified_response, metrics
+            return simplified_response
             
         except Exception as e:
             logger.error(f"Error transcribing file: {e}")
             raise RuntimeError(f"Transcription failed: {e}")
+        finally:
+            # Clean up temporary files
+            cleanup_start = time.time()
+            try:
+                if 'audio_path' in locals() and os.path.exists(audio_path):
+                    os.unlink(audio_path)
+                    parent_dir = os.path.dirname(audio_path)
+                    if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                        os.rmdir(parent_dir)
+            except Exception as e:
+                logger.error(f"Error cleaning up temporary files: {e}")
+            finally:
+                metrics["cleanup"] = time.time() - cleanup_start
     
     def _transcribe_audio_file(self, audio_path: str, return_metrics: bool = False) -> Union[str, Tuple[str, Dict[str, float]]]:
         """
@@ -152,6 +231,11 @@ class TranscriptionService:
         }
         
         try:
+            # Audio loading timing is included in the model_inference step for Faster Whisper
+            # since the library handles it internally
+            audio_loading_start = time.time()
+            metrics["audio_loading"] = time.time() - audio_loading_start
+            
             # Transcribe with the model
             inference_start = time.time()
             segments, info = self.model.transcribe(
@@ -162,14 +246,19 @@ class TranscriptionService:
                 vad_parameters=dict(min_silence_duration_ms=500)  # Minimum duration of silence to consider it a break
             )
             
+            # Decoding timing
+            decoding_start = time.time()
             # Force execution of the generator
             segments_list = list(segments)
-            metrics["model_inference"] = time.time() - inference_start
+            metrics["decoding"] = time.time() - decoding_start
             
             # Process segments to create final text
             postprocessing_start = time.time()
             full_text = " ".join([segment.text.strip() for segment in segments_list])
             metrics["postprocessing"] = time.time() - postprocessing_start
+            
+            # Calculate total inference time (including internal audio loading)
+            metrics["model_inference"] = decoding_start - inference_start
             
             logger.info(f"Transcription completed with {len(segments_list)} segments")
             logger.info(f"Detected language: {info.language} (probability: {info.language_probability:.2f})")
