@@ -249,7 +249,7 @@ export const BACKENDS = {
     }
   },
   
-  // Faster-Whisper backend (example for when you implement it)
+  // Faster-Whisper backend
   fasterWhisper: {
     name: 'Faster-Whisper',
     url: 'http://localhost:3001',
@@ -261,14 +261,48 @@ export const BACKENDS = {
       // In the real app, this would start the Faster Whisper Python server
       const serverStarted = await manageBackendServer('start', 'fasterWhisper', addLog);
       
-      // Simulate initialization
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      addLog('Faster Whisper model loaded successfully');
-      return true;
+      try {
+        // Check if the server is running with a health check
+        const response = await fetch(`${BACKENDS.fasterWhisper.url}/`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API health check failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        addLog(`Faster Whisper backend initialized: ${data.status}`);
+        
+        // Test models endpoint to ensure API is fully functional
+        try {
+          const modelsResponse = await fetch(`${BACKENDS.fasterWhisper.url}/models`);
+          if (modelsResponse.ok) {
+            const modelsData = await modelsResponse.json();
+            addLog(`Available models: ${modelsData.models.map(m => m.id).join(', ')}`);
+            addLog(`Using model: ${modelsData.current_model.id} on ${modelsData.current_model.device}`);
+          }
+        } catch (error) {
+          addLog(`Warning: Could not fetch models list: ${error.message}`);
+          // Continue anyway as this is not critical
+        }
+        
+        return true;
+      } catch (error) {
+        addLog(`Failed to initialize Faster Whisper backend: ${error.message}`);
+        addLog('Please make sure the backend server is running at http://localhost:3001');
+        return false;
+      }
     },
     transcribe: async (audioBlob) => {
+      // Make sure our server is still running
+      if (!activeServerProcess || activeServerProcess.type !== 'fasterWhisper') {
+        throw new Error('Faster Whisper server is not running. Please reinitialize the backend.');
+      }
+      
       const formData = new FormData();
-      formData.append('audio', audioBlob);
+      formData.append('file', audioBlob, 'recording.webm');
       
       const response = await fetch(`${BACKENDS.fasterWhisper.url}/transcribe`, {
         method: 'POST',
@@ -279,8 +313,8 @@ export const BACKENDS = {
         throw new Error(`Transcription failed: ${response.status}`);
       }
       
-      const data = await response.json();
-      return data.text;
+      // Return the full response data including performance metrics
+      return await response.json();
     }
   },
 }; 
