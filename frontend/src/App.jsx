@@ -5,7 +5,7 @@ import { BACKENDS } from './config';
 function MicrophoneButton({ isRecording, onClick, disabled }) {
   return (
     <button
-      className={`flex justify-center items-center w-12 h-12 rounded-full transition duration-300 ${
+      className={`flex justify-center items-center w-10 h-10 rounded-md transition duration-300 ${
         isRecording 
           ? 'bg-red-500 hover:bg-red-600' 
           : 'bg-black hover:bg-gray-800'
