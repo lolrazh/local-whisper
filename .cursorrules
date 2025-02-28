@@ -28,7 +28,7 @@ You are working on a **high-performance transcription app** with the following:
   - **Faster-Whisper / InsanelyFastWhisper (Optimized for speed)**
   - **Real-time streaming and batch processing**
   - **JAX implementation for extreme speed when available**
-  - **Multiple backend options (Local Whisper, Grok API, etc.)**
+  - **Multiple backend options (Vanilla Whisper, Groq API, etc.)**
 - **Monorepo Setup**: PNPM Workspaces + TurboRepo for parallel execution.
 
 ---

@@ -43,7 +43,9 @@ const manageBackendServer = async (action, serverType, addLog) => {
       
       activeServerProcess = {
         type: serverType,
-        url: serverType === 'groqApi' ? 'http://localhost:8000' : `http://localhost:300${Math.floor(Math.random() * 9)}`,
+        url: serverType === 'groqApi' ? 'http://localhost:8000' : 
+             serverType === 'whisper' ? 'http://localhost:8001' :
+             `http://localhost:300${Math.floor(Math.random() * 9)}`,
         // In real implementation: process: process
       };
       
@@ -165,6 +167,75 @@ export const BACKENDS = {
       formData.append('file', audioBlob, 'recording.webm');
       
       const response = await fetch(`${BACKENDS.groqApi.url}/transcribe`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Transcription failed: ${response.status}`);
+      }
+      
+      // Return the full response data including performance metrics
+      return await response.json();
+    }
+  },
+  
+  // Vanilla Whisper backend
+  whisper: {
+    name: 'Vanilla Whisper',
+    url: 'http://localhost:8001',
+    initialize: async (addLog) => {
+      // Shut down any existing server
+      await manageBackendServer('stop', 'all', addLog);
+      
+      addLog('Initializing Vanilla Whisper backend...');
+      
+      // In the real app, this would start the Whisper Python server
+      const serverStarted = await manageBackendServer('start', 'whisper', addLog);
+      
+      try {
+        // Check if the server is running with a health check
+        const response = await fetch(`${BACKENDS.whisper.url}/`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API health check failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        addLog(`Vanilla Whisper backend initialized: ${data.message}`);
+        
+        // Test models endpoint to ensure API is fully functional
+        try {
+          const modelsResponse = await fetch(`${BACKENDS.whisper.url}/models`);
+          if (modelsResponse.ok) {
+            const modelsData = await modelsResponse.json();
+            addLog(`Available model: ${modelsData.models.map(m => m.id).join(', ')}`);
+          }
+        } catch (error) {
+          addLog(`Warning: Could not fetch models list: ${error.message}`);
+          // Continue anyway as this is not critical
+        }
+        
+        return true;
+      } catch (error) {
+        addLog(`Failed to initialize Vanilla Whisper backend: ${error.message}`);
+        addLog('Please make sure the backend server is running at http://localhost:8001');
+        return false;
+      }
+    },
+    transcribe: async (audioBlob) => {
+      // Make sure our server is still running
+      if (!activeServerProcess || activeServerProcess.type !== 'whisper') {
+        throw new Error('Vanilla Whisper server is not running. Please reinitialize the backend.');
+      }
+      
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'recording.webm');
+      
+      const response = await fetch(`${BACKENDS.whisper.url}/transcribe`, {
         method: 'POST',
         body: formData,
       });
