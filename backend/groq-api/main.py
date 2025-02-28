@@ -1,7 +1,7 @@
 import os
 import sys
 import shutil
-from typing import Optional
+from typing import Optional, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, BackgroundTasks
@@ -11,6 +11,7 @@ from loguru import logger
 import uvicorn
 import signal
 import threading
+from pydantic import BaseModel
 
 from transcription import TranscriptionService
 from audio_utils import preprocess_audio, is_valid_audio_format, get_file_size_mb
@@ -60,98 +61,58 @@ transcription_service = TranscriptionService(
 server_instance = None
 
 @app.get("/")
-async def root():
-    """Root endpoint for health check"""
+async def health_check() -> Dict[str, Any]:
+    """Health check endpoint"""
     return {"status": "ok", "message": "Groq Transcription API is running"}
 
-
 @app.post("/shutdown")
-async def shutdown():
+async def shutdown() -> Dict[str, Any]:
     """Shutdown the server gracefully"""
-    logger.info("Shutdown request received")
-    
-    def shutdown_server():
-        # Give a moment for the response to be sent
-        threading.Timer(1.0, lambda: os.kill(os.getpid(), signal.SIGINT)).start()
-    
-    # Start the shutdown process in a separate thread
-    threading.Thread(target=shutdown_server).start()
-    return {"status": "ok", "message": "Server shutdown initiated"}
-
+    logger.info("Shutdown request received, stopping server...")
+    # Send SIGTERM to the current process
+    os.kill(os.getpid(), signal.SIGTERM)
+    return {"status": "ok", "message": "Server is shutting down"}
 
 @app.post("/transcribe")
-async def transcribe_audio(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    model: Optional[str] = Form(None),
-    language: Optional[str] = Form("en"),
-    temperature: float = Form(0.0),
-    prompt: Optional[str] = Form(None)
-):
+async def transcribe_audio(file: UploadFile = File(...)) -> Dict[str, Any]:
     """
-    Transcribe an audio file using the Groq API
-    
-    - **file**: Audio file to transcribe
-    - **model**: Model to use for transcription (defaults to environment variable)
-    - **language**: Language code (optional, defaults to English)
-    - **temperature**: Temperature for generation (0-1, defaults to 0)
-    - **prompt**: Context or specific vocabulary to help with transcription
+    Transcribe an audio file
     """
-    # Validate file format
-    if not is_valid_audio_format(file.filename):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file format. Supported formats: mp3, wav, m4a, flac, ogg, aac"
-        )
+    if not file:
+        raise HTTPException(status_code=400, detail="No file uploaded")
     
     try:
-        # Preprocess audio file for optimal transcription
-        preprocessed_filename, preprocessed_path = preprocess_audio(file.file, file.filename)
-        
-        # Check file size
-        file_size_mb = get_file_size_mb(preprocessed_path)
-        if file_size_mb > MAX_FILE_SIZE_MB:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum size: {MAX_FILE_SIZE_MB}MB"
+        # Check if the transcribe_file_upload method exists (our new implementation)
+        if hasattr(transcription_service, 'transcribe_file_upload'):
+            # Use our new method with detailed performance metrics
+            result = transcription_service.transcribe_file_upload(file.file, file.filename)
+            
+            # Return the complete result including performance metrics
+            return result
+        else:
+            # Use the old async transcribe method (for backward compatibility)
+            # First preprocess the file
+            preprocessed_filename, preprocessed_path = preprocess_audio(file.file, file.filename)
+            
+            # Then transcribe it
+            result = await transcription_service.transcribe(
+                file_path=preprocessed_path
             )
-        
-        # Use the specified model or default
-        active_model = model or DEFAULT_MODEL
-        
-        # Transcribe audio
-        result = await transcription_service.transcribe(
-            file_path=preprocessed_path,
-            language=language,
-            temperature=temperature,
-            prompt=prompt
-        )
-        
-        return JSONResponse(content=result)
-        
+            
+            return result
+            
+    except ValueError as e:
+        # Handle validation errors
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error in transcribe_audio: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+        # Handle other errors
+        logger.error(f"Transcription failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
 
 @app.get("/models")
-async def list_models():
-    """List available models for transcription"""
-    return {
-        "models": [
-            {
-                "id": "distil-whisper-large-v3-en",
-                "name": "Distil Whisper Large v3 (English)",
-                "description": "Optimized for English transcription"
-            },
-            {
-                "id": "whisper-large-v3-turbo",
-                "name": "Whisper Large v3 Turbo",
-                "description": "Fast multi-language transcription"
-            }
-        ]
-    }
-
+async def get_models() -> Dict[str, Any]:
+    """Get available transcription models"""
+    return transcription_service.get_available_models()
 
 if __name__ == "__main__":
     # Create logs directory if it doesn't exist

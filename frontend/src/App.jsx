@@ -118,8 +118,45 @@ function useAudioRecorder() {
   };
 }
 
+// Performance metrics display component
+function PerformanceMetrics({ metrics }) {
+  if (!metrics) return null;
+  
+  return (
+    <div className="mt-2 text-xs text-gray-500 border-t border-gray-200 pt-2">
+      <div className="font-medium mb-1">Performance Metrics:</div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        <div>Total time:</div>
+        <div className="text-right font-mono">{metrics.total_ms}ms</div>
+        
+        {metrics.preprocessing_ms !== undefined && (
+          <>
+            <div>Audio preprocessing:</div>
+            <div className="text-right font-mono">{metrics.preprocessing_ms}ms</div>
+          </>
+        )}
+        
+        {metrics.api_call_ms !== undefined && (
+          <>
+            <div>API call:</div>
+            <div className="text-right font-mono">{metrics.api_call_ms}ms</div>
+          </>
+        )}
+        
+        {metrics.validation_ms !== undefined && (
+          <>
+            <div>Validation:</div>
+            <div className="text-right font-mono">{metrics.validation_ms}ms</div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [transcription, setTranscription] = useState('');
+  const [performanceMetrics, setPerformanceMetrics] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeBackend, setActiveBackend] = useState('null');
   const [backendInitialized, setBackendInitialized] = useState(false);
@@ -137,8 +174,30 @@ function App() {
       
       if (audioBlob) {
         try {
-          const transcriptionResult = await BACKENDS[activeBackend].transcribe(audioBlob);
-          setTranscription(transcriptionResult);
+          const result = await BACKENDS[activeBackend].transcribe(audioBlob);
+          
+          // Handle both simple string returns and object returns with performance data
+          if (typeof result === 'string') {
+            setTranscription(result);
+            setPerformanceMetrics(null);
+          } else {
+            setTranscription(result.text || result);
+            
+            // If we have performance metrics, display them
+            if (result.performance) {
+              setPerformanceMetrics(result.performance);
+              addLog(`Transcription completed in ${result.performance.total_ms}ms`);
+              
+              // Log detailed performance metrics
+              if (result.performance.preprocessing_ms) {
+                addLog(`Audio preprocessing: ${result.performance.preprocessing_ms}ms`);
+              }
+              if (result.performance.api_call_ms) {
+                addLog(`API call: ${result.performance.api_call_ms}ms`);
+              }
+            }
+          }
+          
           addLog(`Transcription received from ${BACKENDS[activeBackend].name}`);
         } catch (error) {
           console.error('Transcription error:', error);
@@ -152,12 +211,16 @@ function App() {
         return;
       }
       setTranscription('');
+      setPerformanceMetrics(null);
       await startRecording();
     }
   };
   
   const handleBackendChange = async (newBackend) => {
     if (isRecording || isProcessing || isInitializing) return;
+    
+    // Don't reinitialize if it's the same backend
+    if (newBackend === activeBackend) return;
     
     setActiveBackend(newBackend);
     setBackendInitialized(false);
@@ -168,9 +231,9 @@ function App() {
       return;
     }
     
-    addLog(`Backend changed to ${BACKENDS[newBackend].name}`);
+    addLog(`Switching to ${BACKENDS[newBackend].name}`);
     
-    // Auto-initialize the backend
+    // Initialize the new backend (this will also handle shutting down previous backends)
     await initializeBackend(newBackend);
   };
   
@@ -255,7 +318,10 @@ function App() {
                 {isProcessing ? (
                   <p className="text-gray-500">Processing audio...</p>
                 ) : transcription ? (
-                  <p>{transcription}</p>
+                  <>
+                    <p>{transcription}</p>
+                    <PerformanceMetrics metrics={performanceMetrics} />
+                  </>
                 ) : (
                   <p className="text-gray-500">Transcription will appear here...</p>
                 )}
