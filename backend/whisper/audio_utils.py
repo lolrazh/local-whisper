@@ -2,11 +2,13 @@ import os
 import tempfile
 import subprocess
 from pathlib import Path
-from typing import BinaryIO, Tuple
+import inspect
+from typing import BinaryIO, Tuple, Union, Any
 from loguru import logger
+from fastapi import UploadFile
 
 
-def preprocess_audio(file: BinaryIO, original_filename: str) -> Tuple[str, Path]:
+async def preprocess_audio(file: Any, original_filename: str) -> Tuple[str, Path]:
     """
     Preprocess audio for optimal transcription.
     - Downsample to 16KHz
@@ -14,7 +16,7 @@ def preprocess_audio(file: BinaryIO, original_filename: str) -> Tuple[str, Path]
     - Convert to FLAC format for lossless compression
     
     Args:
-        file: Audio file binary data
+        file: Audio file binary data or object with async read() method
         original_filename: Original filename with extension
     
     Returns:
@@ -26,10 +28,27 @@ def preprocess_audio(file: BinaryIO, original_filename: str) -> Tuple[str, Path]
     # Get the original file extension
     _, original_ext = os.path.splitext(original_filename)
     
-    # Save the uploaded file temporarily
+    # Generate temporary file paths
     temp_input_path = os.path.join(temp_dir, f"input{original_ext}")
-    with open(temp_input_path, "wb") as temp_file:
-        temp_file.write(file.read())
+    
+    # Check if the file object has an async read method
+    has_async_read = hasattr(file, 'read') and inspect.iscoroutinefunction(file.read)
+    
+    # Handle file content based on type
+    if has_async_read:
+        logger.debug(f"Processing file with async read method: {original_filename}")
+        content = await file.read()
+        with open(temp_input_path, "wb") as temp_file:
+            temp_file.write(content)
+    elif hasattr(file, 'read'):
+        logger.debug(f"Processing file with sync read method: {original_filename}")
+        with open(temp_input_path, "wb") as temp_file:
+            temp_file.write(file.read())
+    else:
+        logger.error(f"Invalid file object: {type(file)}")
+        raise ValueError("File object must have a read method")
+    
+    logger.debug(f"Saved input file to {temp_input_path}")
     
     # Create the output filename
     output_filename = f"processed_{os.path.basename(original_filename).split('.')[0]}.wav"
@@ -49,6 +68,7 @@ def preprocess_audio(file: BinaryIO, original_filename: str) -> Tuple[str, Path]
             "-loglevel", "error"  # Minimize logging
         ]
         
+        logger.debug(f"Running ffmpeg command: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
         logger.info(f"Audio preprocessing complete: {output_filename}")
         

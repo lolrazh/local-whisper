@@ -9,6 +9,7 @@ import torch
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 import numpy as np
 from scipy.io import wavfile
+from fastapi import UploadFile
 
 from audio_utils import preprocess_audio, is_valid_audio_format
 
@@ -57,12 +58,12 @@ class TranscriptionService:
             logger.error(f"Error loading model: {e}")
             raise RuntimeError(f"Failed to load Whisper model: {e}")
     
-    async def transcribe_file_upload(self, file: BinaryIO, filename: str) -> Dict[str, Any]:
+    async def transcribe_file_upload(self, file: UploadFile, filename: str) -> Dict[str, Any]:
         """
         Transcribe audio from an uploaded file with detailed performance metrics.
         
         Args:
-            file: Audio file binary data
+            file: Audio file from FastAPI UploadFile
             filename: Original filename with extension
             
         Returns:
@@ -89,7 +90,7 @@ class TranscriptionService:
             # Preprocess audio
             preprocessing_start = time.time()
             logger.info(f"Starting audio preprocessing for {filename}")
-            output_filename, processed_file_path = preprocess_audio(file, filename)
+            output_filename, processed_file_path = await preprocess_audio(file, filename)
             metrics["preprocessing_ms"] = round((time.time() - preprocessing_start) * 1000)
             logger.info(f"Audio preprocessing completed in {metrics['preprocessing_ms']}ms")
             

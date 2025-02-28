@@ -4,14 +4,17 @@ import shutil
 from typing import Optional, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 import uvicorn
 import signal
 import threading
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+import asyncio
+import tempfile
+import json
 
 from transcription import TranscriptionService
 from audio_utils import preprocess_audio, is_valid_audio_format, get_file_size_mb
@@ -24,14 +27,14 @@ logger.remove()
 logger.add(
     sys.stderr,
     format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    level="INFO"
+    level="DEBUG"
 )
 logger.add("logs/whisper_api.log", rotation="10 MB", retention="3 days", level="DEBUG")
 
 # Create FastAPI app
 app = FastAPI(
-    title="Whisper Transcription API",
-    description="API for transcribing audio files using the Vanilla Whisper model",
+    title="Whisper API",
+    description="API for transcribing audio using Whisper",
     version="1.0.0"
 )
 
@@ -64,12 +67,9 @@ server_instance = None
 
 # Health check endpoint
 @app.get("/")
-async def health_check() -> Dict[str, Any]:
+async def read_root():
     """Health check endpoint"""
-    return {
-        "message": "Whisper API is running",
-        "version": "1.0.0"
-    }
+    return {"status": "ok", "whisper_api": "1.0.0"}
 
 # Shutdown endpoint for graceful termination
 @app.post("/shutdown")
@@ -91,46 +91,44 @@ async def shutdown() -> Dict[str, str]:
 @app.post("/transcribe")
 async def transcribe_audio(
     file: UploadFile = File(...),
-    temperature: float = Form(0.0)
-) -> Dict[str, Any]:
+    temperature: float = Form(0.0),
+):
     """
-    Transcribe an audio file using the Vanilla Whisper model.
+    Transcribe an audio file and return the transcription.
     
     Args:
         file: Audio file to transcribe
-        temperature: Model temperature (0.0 for deterministic output)
+        temperature: Sampling temperature for generation
         
     Returns:
-        Transcription result with performance metrics
+        Transcription result
     """
-    logger.info(f"Received transcription request: {file.filename}, size: {len(await file.read())/(1024*1024):.2f}MB")
-    await file.seek(0)  # Reset file cursor after reading
+    # Get original filename
+    filename = file.filename
     
-    # Check file size
-    content = await file.read()
-    await file.seek(0)  # Reset file cursor
-    file_size_mb = len(content) / (1024 * 1024)
-    
-    if file_size_mb > MAX_FILE_SIZE_MB:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large: {file_size_mb:.2f}MB. Maximum size: {MAX_FILE_SIZE_MB}MB"
-        )
+    # Log the request
+    logger.info(f"Received transcription request for: {filename}")
     
     try:
-        # Process transcription
-        result = await transcription_service.transcribe_file_upload(file, file.filename)
+        # Perform basic validation before processing
+        if not filename:
+            raise ValueError("No filename provided")
+        
+        # Call the transcription service
+        result = await transcription_service.transcribe_file_upload(file, filename)
         return result
+    except ValueError as e:
+        # Handle validation errors
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        # Handle other errors
         logger.error(f"Transcription error: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Transcription failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/models")
-async def get_models() -> Dict[str, Any]:
-    """Get available transcription models"""
+async def get_models():
+    """Get a list of available models"""
     return transcription_service.get_available_models()
 
 if __name__ == "__main__":
