@@ -4,8 +4,7 @@ import time
 from pathlib import Path
 from typing import Optional, Dict, Any, Union
 from loguru import logger
-from groq import Groq
-from groq.types.audio import Transcription
+from groq import AsyncGroq, Groq
 
 
 class TranscriptionService:
@@ -21,6 +20,7 @@ class TranscriptionService:
         self.model = model
         self._validate_credentials()
         self.client = Groq(api_key=self.api_key)
+        self.async_client = AsyncGroq(api_key=self.api_key)
         logger.info(f"TranscriptionService initialized with model: {model}")
         
     def _validate_credentials(self) -> None:
@@ -95,28 +95,39 @@ class TranscriptionService:
         temperature: float,
         prompt: Optional[str],
         response_format: str
-    ) -> Transcription:
+    ) -> Dict[str, Any]:
         """Execute the transcription call to Groq API"""
-        params = {
-            "file": (file_path, file.read()),
-            "model": self.model,
-            "response_format": response_format,
-            "temperature": temperature
-        }
-        
-        if language:
-            params["language"] = language
-            
-        if prompt:
-            params["prompt"] = prompt
-            
-        return self.client.audio.transcriptions.create(**params)
+        try:
+            with open(file_path, "rb") as audio_file:
+                params = {
+                    "model": self.model,
+                    "file": audio_file,
+                    "response_format": response_format,
+                    "temperature": temperature
+                }
+                
+                if language:
+                    params["language"] = language
+                    
+                if prompt:
+                    params["prompt"] = prompt
+                    
+                return self.client.audio.transcriptions.create(**params)
+        except Exception as e:
+            logger.error(f"Error in transcription execution: {str(e)}")
+            raise
     
-    def _format_response(self, transcription: Transcription, elapsed_time: float) -> Dict[str, Any]:
+    def _format_response(self, transcription: Any, elapsed_time: float) -> Dict[str, Any]:
         """Format the transcription response"""
+        if hasattr(transcription, "text"):
+            text = transcription.text
+        elif isinstance(transcription, dict):
+            text = transcription.get("text", "")
+        else:
+            text = str(transcription)
+            
         return {
-            "text": transcription.text,
+            "text": text,
             "processing_time": elapsed_time,
             "model": self.model,
-            # Add any additional fields from the response if needed
         } 

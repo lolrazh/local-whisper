@@ -69,7 +69,7 @@ def is_valid_audio_format(filename: str) -> bool:
     Returns:
         Boolean indicating if the format is valid
     """
-    valid_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac']
+    valid_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.webm']
     _, ext = os.path.splitext(filename.lower())
     return ext in valid_extensions
 

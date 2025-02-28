@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 import uvicorn
+import signal
+import threading
 
 from transcription import TranscriptionService
 from audio_utils import preprocess_audio, is_valid_audio_format, get_file_size_mb
@@ -54,11 +56,27 @@ transcription_service = TranscriptionService(
     model=DEFAULT_MODEL
 )
 
+# For server shutdown handling
+server_instance = None
 
 @app.get("/")
 async def root():
     """Root endpoint for health check"""
     return {"status": "ok", "message": "Groq Transcription API is running"}
+
+
+@app.post("/shutdown")
+async def shutdown():
+    """Shutdown the server gracefully"""
+    logger.info("Shutdown request received")
+    
+    def shutdown_server():
+        # Give a moment for the response to be sent
+        threading.Timer(1.0, lambda: os.kill(os.getpid(), signal.SIGINT)).start()
+    
+    # Start the shutdown process in a separate thread
+    threading.Thread(target=shutdown_server).start()
+    return {"status": "ok", "message": "Server shutdown initiated"}
 
 
 @app.post("/transcribe")

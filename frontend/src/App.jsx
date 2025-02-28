@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { BACKENDS } from './config';
 
-// Smaller microphone button component
+// Microphone button component with square icon when recording
 function MicrophoneButton({ isRecording, onClick, disabled }) {
   return (
     <button
@@ -14,16 +14,22 @@ function MicrophoneButton({ isRecording, onClick, disabled }) {
       disabled={disabled}
       aria-label={isRecording ? 'Stop recording' : 'Start recording'}
     >
-      <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        viewBox="0 0 24 24" 
-        fill="white" 
-        className="w-5 h-5"
-      >
-        <path fillRule="evenodd" d="M13 6a1 1 0 1 0-2 0v4a1 1 0 1 0 2 0V6zm-1 8a1 1 0 0 1 1 1v3a1 1 0 1 1-2 0v-3a1 1 0 0 1 1-1z" clipRule="evenodd"/>
-        <path fillRule="evenodd" d="M12 2a4 4 0 0 0-4 4v4a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4zm-2 4a2 2 0 1 1 4 0v4a2 2 0 1 1-4 0V6z" clipRule="evenodd"/>
-        <path d="M7 12a1 1 0 0 1 1 1 4 4 0 0 0 8 0 1 1 0 1 1 2 0 6 6 0 0 1-5 5.92V21a1 1 0 1 1-2 0v-2.08A6 6 0 0 1 6 13a1 1 0 0 1 1-1z"/>
-      </svg>
+      {isRecording ? (
+        // Square icon when recording
+        <div className="w-4 h-4 bg-white rounded-sm"></div>
+      ) : (
+        // Microphone icon when not recording
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          viewBox="0 0 24 24" 
+          fill="white" 
+          className="w-5 h-5"
+        >
+          <path fillRule="evenodd" d="M13 6a1 1 0 1 0-2 0v4a1 1 0 1 0 2 0V6zm-1 8a1 1 0 0 1 1 1v3a1 1 0 1 1-2 0v-3a1 1 0 0 1 1-1z" clipRule="evenodd"/>
+          <path fillRule="evenodd" d="M12 2a4 4 0 0 0-4 4v4a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4zm-2 4a2 2 0 1 1 4 0v4a2 2 0 1 1-4 0V6z" clipRule="evenodd"/>
+          <path d="M7 12a1 1 0 0 1 1 1 4 4 0 0 0 8 0 1 1 0 1 1 2 0 6 6 0 0 1-5 5.92V21a1 1 0 1 1-2 0v-2.08A6 6 0 0 1 6 13a1 1 0 0 1 1-1z"/>
+        </svg>
+      )}
     </button>
   );
 }
@@ -115,7 +121,7 @@ function useAudioRecorder() {
 function App() {
   const [transcription, setTranscription] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [activeBackend, setActiveBackend] = useState(Object.keys(BACKENDS)[0]);
+  const [activeBackend, setActiveBackend] = useState('null');
   const [backendInitialized, setBackendInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const { isRecording, startRecording, stopRecording, logs, addLog } = useAudioRecorder();
@@ -156,6 +162,12 @@ function App() {
     setActiveBackend(newBackend);
     setBackendInitialized(false);
     setTranscription('');
+    
+    if (newBackend === 'null') {
+      addLog('Please select a valid backend');
+      return;
+    }
+    
     addLog(`Backend changed to ${BACKENDS[newBackend].name}`);
     
     // Auto-initialize the backend
@@ -163,6 +175,8 @@ function App() {
   };
   
   const initializeBackend = async (backend) => {
+    if (backend === 'null') return;
+    
     setIsInitializing(true);
     addLog(`Initializing ${BACKENDS[backend].name}...`);
     
@@ -219,9 +233,9 @@ function App() {
     };
   }, []);
 
-  // Auto-initialize the first backend on mount
+  // No auto-initialization for the null backend
   useEffect(() => {
-    initializeBackend(activeBackend);
+    // We don't auto-initialize anymore since default is 'null'
   }, []);
 
   return (
