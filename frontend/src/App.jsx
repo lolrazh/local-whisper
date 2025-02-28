@@ -127,26 +127,33 @@ function PerformanceMetrics({ metrics }) {
       <div className="font-medium mb-1">Performance Metrics:</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
         <div>Total time:</div>
-        <div className="text-right font-mono">{metrics.total_ms}ms</div>
+        <div className="text-right font-mono">{metrics.total_ms || "-"}ms</div>
         
-        {metrics.preprocessing_ms !== undefined && (
+        {metrics.preprocessing_ms && (
           <>
-            <div>Audio preprocessing:</div>
+            <div>Pre-processing:</div>
             <div className="text-right font-mono">{metrics.preprocessing_ms}ms</div>
           </>
         )}
         
-        {metrics.api_call_ms !== undefined && (
+        {metrics.model_inference_ms && (
+          <>
+            <div>Model inference:</div>
+            <div className="text-right font-mono">{metrics.model_inference_ms}ms</div>
+          </>
+        )}
+        
+        {metrics.api_call_ms && (
           <>
             <div>API call:</div>
             <div className="text-right font-mono">{metrics.api_call_ms}ms</div>
           </>
         )}
         
-        {metrics.validation_ms !== undefined && (
+        {metrics.overhead_ms && (
           <>
-            <div>Validation:</div>
-            <div className="text-right font-mono">{metrics.validation_ms}ms</div>
+            <div>Overhead:</div>
+            <div className="text-right font-mono">{metrics.overhead_ms}ms</div>
           </>
         )}
       </div>
@@ -181,20 +188,71 @@ function App() {
             setTranscription(result);
             setPerformanceMetrics(null);
           } else {
-            setTranscription(result.text || result);
+            // Extract the transcription text only
+            setTranscription(result.text || "");
             
-            // If we have performance metrics, display them
-            if (result.performance) {
-              setPerformanceMetrics(result.performance);
-              addLog(`Transcription completed in ${result.performance.total_ms}ms`);
+            // Format performance metrics
+            if (result.total_ms || (result.performance && result.performance.total_ms)) {
+              // Initialize metrics object
+              const formattedMetrics = {
+                total_ms: result.total_ms || result.performance?.total_ms
+              };
               
-              // Log detailed performance metrics
-              if (result.performance.preprocessing_ms) {
-                addLog(`Audio preprocessing: ${result.performance.preprocessing_ms}ms`);
+              // Process Whisper metrics - direct properties at the root level
+              if (result.preprocessing_ms !== undefined) {
+                formattedMetrics.preprocessing_ms = result.preprocessing_ms;
               }
-              if (result.performance.api_call_ms) {
-                addLog(`API call: ${result.performance.api_call_ms}ms`);
+              
+              if (result.model_inference_ms !== undefined) {
+                formattedMetrics.model_inference_ms = result.model_inference_ms;
               }
+              
+              if (result.overhead_ms !== undefined) {
+                formattedMetrics.overhead_ms = result.overhead_ms;
+              }
+              
+              // Process Groq API metrics from performance object
+              if (result.performance) {
+                if (result.performance.preprocessing_ms) {
+                  formattedMetrics.preprocessing_ms = result.performance.preprocessing_ms;
+                }
+                
+                if (result.performance.api_call_ms) {
+                  formattedMetrics.model_inference_ms = result.performance.api_call_ms;
+                }
+                
+                // Calculate overhead if not provided
+                const measuredTime = 
+                  (formattedMetrics.preprocessing_ms || 0) + 
+                  (formattedMetrics.model_inference_ms || 0);
+                
+                if (formattedMetrics.total_ms > measuredTime) {
+                  formattedMetrics.overhead_ms = formattedMetrics.total_ms - measuredTime;
+                }
+              }
+              
+              // Legacy format support (kept for backward compatibility)
+              if (result.duration) {
+                // Convert seconds to ms for consistency
+                formattedMetrics.total_ms = Math.round(result.duration * 1000);
+                
+                // Extract any available performance metrics if they're in the response
+                if (result.audio_preprocessing) {
+                  formattedMetrics.preprocessing_ms = Math.round(result.audio_preprocessing * 1000);
+                }
+                
+                if (result.model_inference) {
+                  formattedMetrics.model_inference_ms = Math.round(result.model_inference * 1000);
+                }
+                
+                if (result.overhead) {
+                  formattedMetrics.overhead_ms = Math.round(result.overhead * 1000);
+                }
+              }
+              
+              setPerformanceMetrics(formattedMetrics);
+            } else {
+              setPerformanceMetrics(null);
             }
           }
           

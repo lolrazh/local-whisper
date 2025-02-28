@@ -95,11 +95,13 @@ class TranscriptionService:
             # Add detailed performance metrics
             response["performance"] = metrics
             
-            # Log performance summary
-            logger.info(f"Transcription completed in {metrics['total_ms']}ms - " +
-                       f"Validation: {metrics['validation_ms']}ms, " +
-                       f"Preprocessing: {metrics['preprocessing_ms']}ms, " +
-                       f"API call: {metrics['api_call_ms']}ms")
+            # Log performance summary without including speed in logs that get displayed in UI
+            logger.info(f"Transcription completed successfully")
+            # Detailed metrics are logged at debug level only
+            logger.debug(f"Performance metrics: total={metrics['total_ms']}ms, " +
+                      f"validation={metrics['validation_ms']}ms, " +
+                      f"preprocessing={metrics['preprocessing_ms']}ms, " +
+                      f"api_call={metrics['api_call_ms']}ms")
             
             # Clean up temporary files
             try:

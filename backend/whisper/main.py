@@ -116,6 +116,11 @@ async def transcribe_audio(
         
         # Call the transcription service
         result = await transcription_service.transcribe_file_upload(file, filename)
+        
+        # Log the completion with proper timing
+        total_time = result.get("total_ms", 0)
+        logger.info(f"Transcription completed in {total_time}ms")
+        
         return result
     except ValueError as e:
         # Handle validation errors
