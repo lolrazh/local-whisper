@@ -6,7 +6,6 @@ This is a FastAPI-based backend for transcribing audio files using the Groq API 
 
 - **High-Performance Transcription**: Leverage Groq API for fast, accurate transcriptions.
 - **Audio Preprocessing**: Automatically optimize audio files for best transcription results.
-- **Asynchronous API**: Non-blocking design for handling multiple requests.
 - **Error Handling**: Comprehensive error handling and logging.
 - **Configurable**: Easy configuration via environment variables.
 
@@ -18,8 +17,28 @@ This is a FastAPI-based backend for transcribing audio files using the Groq API 
 
 ## Setup
 
+### Windows
+
+1. Ensure FFmpeg is installed on your system and added to PATH.
+
+2. Update the `.env` file with your Groq API key:
+   ```
+   GROQ_API_KEY=your_api_key_here
+   ```
+
+3. Install dependencies:
+   ```powershell
+   .\install_deps.ps1
+   ```
+
+4. Start the server:
+   ```powershell
+   .\start.ps1
+   ```
+
+### Linux/MacOS
+
 1. Ensure FFmpeg is installed on your system:
-   - Windows: Download from [FFmpeg website](https://ffmpeg.org/download.html) and add to PATH
    - Linux: `sudo apt-get install ffmpeg`
    - macOS: `brew install ffmpeg`
 
@@ -28,18 +47,23 @@ This is a FastAPI-based backend for transcribing audio files using the Groq API 
    GROQ_API_KEY=your_api_key_here
    ```
 
-3. Install dependencies:
+3. Create a virtual environment:
+   ```bash
+   python -m venv venv
    ```
+
+4. Activate the virtual environment:
+   ```bash
+   source venv/bin/activate
+   ```
+
+5. Install dependencies:
+   ```bash
    pip install -r requirements.txt
    ```
 
-4. Start the server:
-   ```
-   python main.py
-   ```
-   
-   Or use the provided start script:
-   ```
+6. Start the server:
+   ```bash
    ./start.sh
    ```
 
@@ -52,10 +76,6 @@ This is a FastAPI-based backend for transcribing audio files using the Groq API 
 - `POST /transcribe`: Transcribe an audio file.
   - Parameters:
     - `file`: Audio file (multipart/form-data)
-    - `model` (optional): Model to use for transcription
-    - `language` (optional): Language code (defaults to "en")
-    - `temperature` (optional): Temperature for generation (0-1, defaults to 0)
-    - `prompt` (optional): Context or specific vocabulary to help with transcription
 
 ### List Models
 - `GET /models`: List available models for transcription.
@@ -73,6 +93,5 @@ This follows the Groq API best practices for audio transcription.
 
 - `GROQ_API_KEY`: Your Groq API key
 - `DEFAULT_MODEL`: Default model to use for transcription (defaults to "distil-whisper-large-v3-en")
-- `MAX_FILE_SIZE_MB`: Maximum allowed file size in MB (defaults to 25)
 - `PORT`: Port to run the server on (defaults to 8000)
 - `HOST`: Host to run the server on (defaults to "0.0.0.0") 

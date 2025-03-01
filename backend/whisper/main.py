@@ -8,7 +8,7 @@ import uvicorn
 
 from transcription import TranscriptionService
 
-# Configure basic logging
+# Configure logging
 logger.add("logs/whisper_api.log", rotation="10 MB")
 
 # Create FastAPI app
@@ -48,33 +48,22 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     temperature: float = Form(0.0),
 ):
-    """
-    Transcribe an audio file and return the transcription.
-    """
-    # Get original filename
+    """Transcribe an audio file and return the transcription."""
     filename = file.filename
-    
-    # Log the request
     logger.info(f"Received transcription request for: {filename}")
     
     try:
-        # Basic validation
         if not filename:
             raise ValueError("No filename provided")
         
-        # Call the transcription service
         result = await transcription_service.transcribe_file_upload(file, filename)
-        
-        # Log completion
         logger.info(f"Transcription completed in {result.get('total_ms', 0)}ms")
         
         return result
     except ValueError as e:
-        # Handle validation errors
         logger.error(f"Validation error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Handle other errors
         logger.error(f"Transcription error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 

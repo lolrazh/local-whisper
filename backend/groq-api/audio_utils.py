@@ -1,12 +1,13 @@
 import os
 import tempfile
 import subprocess
+import time
 from pathlib import Path
 from typing import BinaryIO, Tuple
 from loguru import logger
 
 
-def preprocess_audio(file: BinaryIO, original_filename: str) -> Tuple[str, Path]:
+def preprocess_audio(file: BinaryIO, original_filename: str) -> Tuple[Path, float]:
     """
     Preprocess audio for optimal transcription.
     - Downsample to 16KHz
@@ -18,8 +19,10 @@ def preprocess_audio(file: BinaryIO, original_filename: str) -> Tuple[str, Path]
         original_filename: Original filename with extension
     
     Returns:
-        Tuple with the new filename and the path to the processed file
+        Tuple with the path to the processed file and processing time in seconds
     """
+    start_time = time.time()
+    
     # Create a temporary directory
     temp_dir = tempfile.mkdtemp()
     
@@ -52,7 +55,8 @@ def preprocess_audio(file: BinaryIO, original_filename: str) -> Tuple[str, Path]
         subprocess.run(cmd, check=True)
         logger.info(f"Audio preprocessing complete: {output_filename}")
         
-        return output_filename, Path(temp_output_path)
+        processing_time = time.time() - start_time
+        return Path(temp_output_path), processing_time
     
     except subprocess.CalledProcessError as e:
         logger.error(f"Error preprocessing audio: {e}")

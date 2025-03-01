@@ -1,8 +1,11 @@
 #!/bin/bash
 
-# Activate virtual environment
-source venv/Scripts/activate  # For Windows
-# source venv/bin/activate    # Uncomment for Linux/Mac
+# Detect OS and activate the appropriate virtual environment
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    source venv/Scripts/activate
+else
+    source venv/bin/activate
+fi
 
 # Install dependencies if needed
 pip install -r requirements.txt

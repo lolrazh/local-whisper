@@ -3,7 +3,7 @@ import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Dict, Any, Union
+from typing import Dict, Any
 from loguru import logger
 import torch
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
@@ -13,10 +13,10 @@ from fastapi import UploadFile
 
 from audio_utils import preprocess_audio, is_valid_audio_format
 
-# Set simple torch settings
+# Set torch settings
 torch.set_num_threads(4)
 
-# Simple device detection
+# Device detection
 device = "cuda" if torch.cuda.is_available() else "cpu"
 logger.info(f"Using device: {device}")
 
@@ -54,7 +54,7 @@ class TranscriptionService:
                 self.processor.save_pretrained(self.model_path)
                 self.model.save_pretrained(self.model_path)
                 
-            logger.info(f"Model loaded successfully")
+            logger.info("Model loaded successfully")
         except Exception as e:
             logger.error(f"Error loading model: {e}")
             raise RuntimeError(f"Failed to load Whisper model: {e}")

@@ -2,7 +2,7 @@ import os
 import tempfile
 import subprocess
 from pathlib import Path
-from typing import Tuple, Any
+from typing import Tuple
 from loguru import logger
 from fastapi import UploadFile
 
@@ -34,7 +34,7 @@ async def preprocess_audio(file: UploadFile, original_filename: str) -> Tuple[Pa
     output_filename = f"processed_{os.path.splitext(original_filename)[0]}.wav"
     output_path = os.path.join(temp_dir, output_filename)
     
-    # Convert using FFmpeg (simple, direct call)
+    # Convert using FFmpeg
     cmd = [
         "ffmpeg",
         "-y",  # Overwrite output files
@@ -45,7 +45,7 @@ async def preprocess_audio(file: UploadFile, original_filename: str) -> Tuple[Pa
         output_path  # Output file
     ]
     
-    # Run FFmpeg directly, with full error output
+    # Run FFmpeg directly
     try:
         result = subprocess.run(
             cmd,
@@ -69,7 +69,6 @@ async def preprocess_audio(file: UploadFile, original_filename: str) -> Tuple[Pa
         logger.error(error_msg)
         raise RuntimeError(error_msg)
     except Exception as e:
-        # Simple error handling
         logger.error(f"Error preprocessing audio: {str(e)}")
         raise RuntimeError(f"Audio preprocessing failed: {str(e)}")
 
