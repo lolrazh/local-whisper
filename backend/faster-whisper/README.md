@@ -11,14 +11,29 @@ This backend uses the [Faster Whisper](https://github.com/guillaumekln/faster-wh
 
 ## Setup
 
+### Windows
+
+1. Create a virtual environment and install dependencies:
+   ```powershell
+   .\install_deps.ps1
+   ```
+
+2. Start the server:
+   ```powershell
+   .\start.ps1
+   ```
+
+### Linux/MacOS
+
 1. Create a virtual environment:
    ```bash
    python -m venv venv
    ```
 
 2. Activate the virtual environment:
-   - Windows: `.\venv\Scripts\activate`
-   - Linux/MacOS: `source venv/bin/activate`
+   ```bash
+   source venv/bin/activate
+   ```
 
 3. Install requirements:
    ```bash
@@ -26,10 +41,6 @@ This backend uses the [Faster Whisper](https://github.com/guillaumekln/faster-wh
    ```
 
 4. Start the server:
-   ```bash
-   python main.py
-   ```
-   or use the provided script:
    ```bash
    ./start.sh
    ```
@@ -60,7 +71,8 @@ The following environment variables can be set:
 
 ## Model Information
 
-- **base.en**: ~150MB, fastest, less accurate
-- **small.en**: ~500MB, fast with reasonable accuracy
-- **medium.en**: ~1.5GB, slower but more accurate
-- **large-v3**: ~3GB, slower but most accurate 
+- **tiny.en**: ~75MB, fastest, least accurate
+- **base.en**: ~150MB, fast, less accurate
+- **small.en**: ~500MB, good balance of speed and accuracy
+- **medium.en**: ~1.5GB, more accurate but slower
+- **large-v3**: ~3GB, most accurate but slowest 

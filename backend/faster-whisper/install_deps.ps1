@@ -33,13 +33,8 @@ import torch
 print(f"Torch installed: {torch.__version__}")
 import faster_whisper
 print(f"Faster Whisper installed: OK")
-import soundfile
-print(f"Soundfile installed: OK")
-try:
-    import librosa
-    print(f"Librosa installed: OK")
-except ImportError:
-    print("Librosa not installed, using fallback")
+import ctranslate2
+print(f"CTranslate2 installed: OK")
 '@
 
 # Save verification script to a temporary file
@@ -52,4 +47,4 @@ $verification_script | Out-File -FilePath $verification_file -Encoding utf8
 # Clean up
 Remove-Item -Path $verification_file -Force
 
-Write-Host "Installation completed!" 
+Write-Host "Installation completed!"
