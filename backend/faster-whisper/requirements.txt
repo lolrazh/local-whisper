@@ -1,4 +1,5 @@
-faster-whisper
+# Core requirements
+faster-whisper>=0.9.0
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
@@ -8,4 +9,13 @@ scipy==1.11.3
 numpy==1.26.0
 pydantic==2.4.2
 soundfile==0.12.1
-torch>=2.1.0 
+torch>=2.1.0,<3.0.0
+
+# CPU optimization dependencies
+# Optional: librosa can be difficult to install on some platforms
+librosa>=0.10.1; platform_system != "Windows" or python_version < "3.11"
+# Fallback for newer Python on Windows
+audioread>=3.0.1
+numba>=0.57.1
+ctranslate2>=3.20.0
+psutil>=5.9.5 
